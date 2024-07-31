@@ -29,6 +29,8 @@ contract ZkMinimalAccount is IAccount, Ownable {
     error ZKMinimalAcccount__NotEnoughBalance();
     error ZkminimalAccount__NotFromBootloader();
     error ZkMinimalAccount__ExecutionFailed();
+    error ZkminimalAccount__NotFromBootloaderOrOwner();
+    error ZkMinimalAccount__FailedToPay();
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -40,6 +42,17 @@ contract ZkMinimalAccount is IAccount, Ownable {
         _;
     }
 
+    modifier requireFromBootLoaderOrOwner() {
+        if (msg.sender != BOOTLOADER_FORMAL_ADDRESS && msg.sender != owner()) {
+            revert ZkminimalAccount__NotFromBootloaderOrOwner();
+        }
+        _;
+    }
+
+    constructor() Ownable(msg.sender) {}
+
+    receive() external payable {}
+
     /*//////////////////////////////////////////////////////////////
                            EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -49,12 +62,47 @@ contract ZkMinimalAccount is IAccount, Ownable {
      * @notice must validation the transaction
      * @notice check to see if we have enough money in account to pay
      */
-    function validateTransaction(bytes32 _txHash, bytes32 _suggestedSignedHash, Transaction calldata _transaction)
+    function validateTransaction(
+        bytes32, /*_txHash*/
+        bytes32, /*_suggestedSignedHash*/
+        Transaction calldata _transaction
+    ) external payable requireFromBootLoader returns (bytes4 magic) {
+        return _validateTransaction(_transaction);
+    }
+
+    function executeTransaction(
+        bytes32, /*_txHash*/
+        bytes32, /*_suggestedSignedHash*/
+        Transaction calldata _transaction
+    ) external payable requireFromBootLoaderOrOwner {
+        _executeTransaction(_transaction);
+    }
+
+    function executeTransactionFromOutside(Transaction calldata _transaction) external payable {
+        _validateTransaction(_transaction);
+        _executeTransaction(_transaction);
+    }
+
+    function payForTransaction(bytes32, /*_txHash*/ bytes32, /*_suggestedSignedHash*/ Transaction calldata _transaction)
         external
         payable
-        requireFromBootLoader
-        returns (bytes4 magic)
     {
+        bool success = _transaction.payToTheBootloader();
+        if (!success) {
+            revert ZkMinimalAccount__FailedToPay();
+        }
+    }
+
+    function prepareForPaymaster(bytes32 _txHash, bytes32 _possibleSignedHash, Transaction calldata _transaction)
+        external
+        payable
+    {}
+
+    /*//////////////////////////////////////////////////////////////
+                           INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function _validateTransaction(Transaction memory _transaction) internal returns (bytes4 magic) {
         // this increments the nonce
         SystemContractsCaller.systemCallWithPropagatedRevert(
             uint32(gasleft()),
@@ -82,11 +130,7 @@ contract ZkMinimalAccount is IAccount, Ownable {
         return magic;
     }
 
-    function executeTransaction(
-        bytes32, /*_txHash*/
-        bytes32, /*_suggestedSignedHash*/
-        Transaction calldata _transaction
-    ) external payable {
+    function _executeTransaction(Transaction memory _transaction) internal {
         address to = address(uint160(_transaction.to));
         uint128 value = Utils.safeCastToU128(_transaction.value);
         bytes memory data = _transaction.data;
@@ -105,20 +149,4 @@ contract ZkMinimalAccount is IAccount, Ownable {
             }
         }
     }
-
-    function executeTransactionFromOutside(Transaction calldata _transaction) external payable {}
-
-    function payForTransaction(bytes32 _txHash, bytes32 _suggestedSignedHash, Transaction calldata _transaction)
-        external
-        payable
-    {}
-
-    function prepareForPaymaster(bytes32 _txHash, bytes32 _possibleSignedHash, Transaction calldata _transaction)
-        external
-        payable
-    {}
-
-    /*//////////////////////////////////////////////////////////////
-                           INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
 }

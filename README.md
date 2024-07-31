@@ -8,4 +8,4 @@
 
 ## forge build notes
 
-- For system mode running use: ```forge build --system-mode --zksync```
+- For system mode running use: ```forge build --system-mode=true --zksync```

@@ -7,6 +7,8 @@ remappings = [
     "@openzeppelin/contracts-upgradeable=lib/openzeppelin-contracts-upgradeable/contracts",
     "@openzeppelin/contracts=lib/openzeppelin-contracts/contracts",
 ]
-is-system = true
+# is-system = true
+via-ir = true
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
